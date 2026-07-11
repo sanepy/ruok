@@ -1,0 +1,46 @@
+- case: ok_and_err_infer_type
+  main: |
+    from ruok import Ok, Err
+    reveal_type(Ok(1))       # N: Revealed type is "ruok.ruok.Ok[int]"
+    reveal_type(Err("oops")) # N: Revealed type is "ruok.ruok.Err[str]"
+
+- case: is_ok_narrows
+  main: |
+    from ruok import Ok, Err, Res, is_ok
+    res: Res[int, str] = Ok(1)
+    if is_ok(res):
+        reveal_type(res) # N: Revealed type is "ruok.ruok.Ok[int]"
+    else:
+        reveal_type(res) # N: Revealed type is "ruok.ruok.Err[str]"
+
+- case: is_err_narrows
+  main: |
+    from ruok import Ok, Err, Res, is_err
+    res: Res[int, str] = Err("bad")
+    if is_err(res):
+        reveal_type(res) # N: Revealed type is "ruok.ruok.Err[str]"
+    else:
+        reveal_type(res) # N: Revealed type is "ruok.ruok.Ok[int]"
+
+- case: covariance
+  main: |
+    from ruok import Ok, Err
+    ok_int: Ok[int] = Ok(42)
+    ok_float: Ok[float] = ok_int       # Ok - int is subtype of float
+    ok_int = ok_float                  # E: Incompatible types in assignment (expression has type "Ok[float]", variable has type "Ok[int]")  [assignment]
+
+- case: r_alias
+  main: |
+    from ruok import Ok, Err, RS, is_ok, is_err
+    res: RS[float] = Ok(1.0)
+    if is_ok(res):
+        reveal_type(res.ok()) # N: Revealed type is "float"
+    else:
+        reveal_type(res.err()) # N: Revealed type is "str"
+
+- case: re_alias_err_is_exception
+  main: |
+    from ruok import Err, RE, is_err
+    res: RE[int] = Err(ValueError("boom"))
+    if is_err(res):
+        reveal_type(res.err()) # N: Revealed type is "Exception"
