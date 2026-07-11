@@ -172,7 +172,8 @@ def display_error[**P, T](
     @wraps(f)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> T | None:
       if handler is None:
-        raise NotImplementedError("The built-in displayer is not implemented yet")
+        msg = "The built-in displayer is not implemented yet"
+        raise NotImplementedError(msg)
       try:
         return f(*args, **kwargs)
       except Exception as exc:
@@ -193,7 +194,8 @@ def display_error_async[**P, T](
     @wraps(f)
     async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T | None:
       if handler is None:
-        raise NotImplementedError("The built-in displayer is not implemented yet")
+        msg = "The built-in displayer is not implemented yet"
+        raise NotImplementedError(msg)
       try:
         return await f(*args, **kwargs)
       except Exception as exc:
