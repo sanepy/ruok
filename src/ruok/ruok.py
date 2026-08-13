@@ -1,4 +1,6 @@
+import inspect
 from collections.abc import Awaitable, Callable
+from contextlib import suppress
 from functools import wraps
 from typing import (
   NoReturn,
@@ -165,43 +167,74 @@ def catch_async(*exceptions_or_func: object) -> object:
       return _make_decorator(resolved)
 
 
-def display_error[**P, T](
+def _strip_early_returns(exc: BaseException) -> BaseException:
+  """Walk the __cause__ chain and return the first non-EarlyReturn exception.
+
+  If the entire chain is EarlyReturn (no underlying cause), return the
+  original exception as-is.
+  """
+  original = exc
+  while isinstance(exc, EarlyReturn):
+    if exc.__cause__ is not None:
+      exc = exc.__cause__
+    else:
+      return original
+  return exc
+
+
+def display_error(
+  *,
+  displayer: Callable[[BaseException], None] | None = None,
   handler: Callable[[BaseException], None] | None = None,
-) -> Callable[[Callable[P, T]], Callable[P, T | None]]:
-  def decorator(f: Callable[P, T]) -> Callable[P, T | None]:
+  strip_early_returns: bool = True,
+) -> object:
+  def _run_callbacks(exc: BaseException) -> None:
+    cleaned = _strip_early_returns(exc) if strip_early_returns else exc
+
+    if handler is not None:
+      with suppress(Exception):
+        handler(cleaned)
+
+    if displayer is not None:
+      with suppress(Exception):
+        displayer(cleaned)
+    elif displayer is None:
+      msg = "The built-in displayer is not implemented yet"
+      raise NotImplementedError(msg)
+
+  @overload
+  def decorator[**P, T](
+    f: Callable[P, Awaitable[T]],
+  ) -> Callable[P, Awaitable[T | None]]: ...
+
+  @overload
+  def decorator[**P, T](
+    f: Callable[P, T],
+  ) -> Callable[P, T | None]: ...
+
+  def decorator(
+    f: Callable[..., object],
+  ) -> Callable[..., object]:
+    if inspect.iscoroutinefunction(f):
+
+      @wraps(f)
+      async def async_wrapper(*args: object, **kwargs: object) -> object:
+        try:
+          return cast("object", await f(*args, **kwargs))
+        except Exception as exc:
+          _run_callbacks(exc)
+          return None
+
+      return async_wrapper
+
     @wraps(f)
-    def wrapper(*args: P.args, **kwargs: P.kwargs) -> T | None:
-      if handler is None:
-        msg = "The built-in displayer is not implemented yet"
-        raise NotImplementedError(msg)
+    def sync_wrapper(*args: object, **kwargs: object) -> object:
       try:
         return f(*args, **kwargs)
       except Exception as exc:
-        handler(exc)
+        _run_callbacks(exc)
         return None
 
-    return wrapper
-
-  return decorator
-
-
-def display_error_async[**P, T](
-  handler: Callable[[BaseException], None] | None = None,
-) -> Callable[[Callable[P, Awaitable[T]]], Callable[P, Awaitable[T | None]]]:
-  def decorator(
-    f: Callable[P, Awaitable[T]],
-  ) -> Callable[P, Awaitable[T | None]]:
-    @wraps(f)
-    async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T | None:
-      if handler is None:
-        msg = "The built-in displayer is not implemented yet"
-        raise NotImplementedError(msg)
-      try:
-        return await f(*args, **kwargs)
-      except Exception as exc:
-        handler(exc)
-        return None
-
-    return wrapper
+    return sync_wrapper
 
   return decorator
