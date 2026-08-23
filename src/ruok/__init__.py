@@ -8,7 +8,6 @@ from ruok.ruok import (
   catch,
   catch_async,
   display_error,
-  display_error_async,
   is_err,
   is_ok,
 )
@@ -23,7 +22,6 @@ __all__ = [
   "catch",
   "catch_async",
   "display_error",
-  "display_error_async",
   "is_err",
   "is_ok",
 ]

@@ -40,7 +40,7 @@ indent-width = 2
 
 [tool.ruff.lint]
 select = ["ALL"]
-ignore = ["BLE001", "COM812", "D", "N818"]
+ignore = ["BLE001", "C901", "COM812", "D", "N818", "PLR0913", "PLR0915"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*py" = ["ANN201", "ANN202", "EM101", "EM102", "INP001", "PLR2004", "S101", "TRY003"]

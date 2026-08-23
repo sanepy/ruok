@@ -1,15 +1,19 @@
 import inspect
+import sys
 from collections.abc import Awaitable, Callable
-from contextlib import suppress
 from functools import wraps
+from types import TracebackType
 from typing import (
   NoReturn,
+  Protocol,
   TypeIs,
   cast,
   final,
   overload,
   override,
 )
+
+from ruok._error_displayer import error_displayer
 
 
 @final
@@ -167,63 +171,126 @@ def catch_async(*exceptions_or_func: object) -> object:
       return _make_decorator(resolved)
 
 
-def _strip_early_returns(exc: BaseException) -> BaseException:
-  """Walk the __cause__ chain and return the first non-EarlyReturn exception.
+class _DisplayErrorProtocol(Protocol):
+  @overload
+  def __call__[**P, T](
+    self,
+    f: Callable[P, Awaitable[T]],
+  ) -> Callable[P, Awaitable[T]]: ...
 
-  If the entire chain is EarlyReturn (no underlying cause), return the
-  original exception as-is.
-  """
-  original = exc
-  while isinstance(exc, EarlyReturn):
-    if exc.__cause__ is not None:
-      exc = exc.__cause__
-    else:
-      return original
-  return exc
+  @overload
+  def __call__[**P, T](
+    self,
+    f: Callable[P, T],
+  ) -> Callable[P, T]: ...
+
+  def __call__(
+    self,
+    f: Callable[..., object],
+  ) -> Callable[..., object]: ...
 
 
 def display_error(
   *,
-  displayer: Callable[[BaseException], None] | None = None,
   handler: Callable[[BaseException], None] | None = None,
+  displayer: Callable[[BaseException], None] | None = None,
   strip_early_returns: bool = True,
-) -> object:
-  def _run_callbacks(exc: BaseException) -> None:
-    cleaned = _strip_early_returns(exc) if strip_early_returns else exc
+  show_propagation: bool = False,
+  raw_raise: bool = False,
+  color: bool | None = None,
+) -> _DisplayErrorProtocol:
+  """Decorator that renders exceptions.
+
+  Intended to wrap the program's top-level entry point (e.g., `main()`)
+
+  Args:
+    handler: Callback for side effects (e.g., logging or telemetry).
+    displayer: Renderer to override the built-in ANSI terminal output.
+    strip_early_returns: Traverses the exception chain and
+      strips `EarlyReturn` exceptions.
+    show_propagation: Renders an additional footer trace detailing
+      each frame where an `EarlyReturn` was propagated.
+    raw_raise: Disables exception interception and lets errors propagate normally.
+    color: Force-enables (`True`) or disables (`False`) ANSI color output. When
+      `None`, auto-detects support via TTY checks and `NO_COLOR`/`FORCE_COLOR`
+      environment variables.
+
+  Returns:
+    A decorator capable of wrapping both sync and async functions.
+  """
+
+  def _handle_exception(exc: BaseException) -> None:
+    if strip_early_returns:
+
+      def _strip_early_returns(
+        exc: BaseException,
+      ) -> tuple[BaseException, list[TracebackType]]:
+        original: BaseException = exc
+        seen: set[int] = set()
+        hops: list[TracebackType] = []
+
+        while isinstance(exc, EarlyReturn) and id(exc) not in seen:
+          seen.add(id(exc))
+          if exc.__traceback__ is not None:
+            hops.append(exc.__traceback__)
+          if exc.__cause__ is not None:
+            exc = exc.__cause__
+          elif exc.args and isinstance(exc.args[0], BaseException):
+            exc = exc.args[0]
+          else:
+            return original, []
+
+        return exc, hops
+
+      cleaned, hops = _strip_early_returns(exc)
+    else:
+      cleaned, hops = exc, ()
 
     if handler is not None:
-      with suppress(Exception):
+      try:
         handler(cleaned)
+      except Exception as handler_exc:
+        handler_exc.__suppress_context__ = True
+        _ = sys.stderr.write("Custom handler raised an exception:")
+        error_displayer(handler_exc, color=color)
 
     if displayer is not None:
-      with suppress(Exception):
+      try:
         displayer(cleaned)
-    elif displayer is None:
-      msg = "The built-in displayer is not implemented yet"
-      raise NotImplementedError(msg)
-
-  @overload
-  def decorator[**P, T](
-    f: Callable[P, Awaitable[T]],
-  ) -> Callable[P, Awaitable[T | None]]: ...
-
-  @overload
-  def decorator[**P, T](
-    f: Callable[P, T],
-  ) -> Callable[P, T | None]: ...
+      except Exception as displayer_exc:
+        displayer_exc.__suppress_context__ = True
+        _ = sys.stderr.write("Custom displayer raised an exception:")
+        error_displayer(displayer_exc, color=color)
+        _ = sys.stderr.write("Original exception:")
+        error_displayer(
+          cleaned,
+          hops,
+          color=color,
+          show_propagation=show_propagation,
+        )
+    else:
+      error_displayer(
+        cleaned,
+        hops,
+        color=color,
+        show_propagation=show_propagation,
+      )
 
   def decorator(
     f: Callable[..., object],
   ) -> Callable[..., object]:
+    if raw_raise:
+      return f
+
     if inspect.iscoroutinefunction(f):
 
       @wraps(f)
       async def async_wrapper(*args: object, **kwargs: object) -> object:
         try:
           return cast("object", await f(*args, **kwargs))
-        except Exception as exc:
-          _run_callbacks(exc)
-          return None
+        except (Exception, KeyboardInterrupt) as exc:
+          _handle_exception(exc)
+          sys.exit(1)
 
       return async_wrapper
 
@@ -231,10 +298,10 @@ def display_error(
     def sync_wrapper(*args: object, **kwargs: object) -> object:
       try:
         return f(*args, **kwargs)
-      except Exception as exc:
-        _run_callbacks(exc)
-        return None
+      except (Exception, KeyboardInterrupt) as exc:
+        _handle_exception(exc)
+        sys.exit(1)
 
     return sync_wrapper
 
-  return decorator
+  return cast("_DisplayErrorProtocol", decorator)
