@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable
 from functools import wraps
 from types import TracebackType
 from typing import (
-  NoReturn,
+  Never,
   Protocol,
   TypeIs,
   cast,
@@ -70,7 +70,7 @@ class Err[E]:
   def err(self) -> E:
     return self._value
 
-  def q(self) -> NoReturn:
+  def q(self) -> Never:
     err = self.err()
     raise EarlyReturn(err) from (err if isinstance(err, BaseException) else None)
 
