@@ -249,7 +249,6 @@ def display_error(
       def _strip_early_returns(
         exc: BaseException,
       ) -> tuple[BaseException, list[TracebackType]]:
-        original: BaseException = exc
         seen: set[int] = set()
         hops: list[TracebackType] = []
 
@@ -262,7 +261,7 @@ def display_error(
           elif exc.args and isinstance(exc.args[0], BaseException):
             exc = exc.args[0]
           else:
-            return original, []
+            break
 
         return exc, hops
 
