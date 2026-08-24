@@ -92,10 +92,36 @@ class EarlyReturn(Exception):
   pass
 
 
+class _CatchProtocol(Protocol):
+  @overload
+  def __call__[**P, T](  # pyright: ignore[reportOverlappingOverload]
+    self,
+    f: Callable[P, Awaitable[T]],
+  ) -> Callable[P, Awaitable[RE[T]]]: ...
+
+  @overload
+  def __call__[**P, T](
+    self,
+    f: Callable[P, T],
+  ) -> Callable[P, RE[T]]: ...
+
+  def __call__(
+    self,
+    f: Callable[..., object],
+  ) -> Callable[..., object]: ...
+
+
 @overload
-def catch[E: Exception, **P, T](
+def catch[E: Exception](
   *exceptions: type[E],
-) -> Callable[[Callable[P, T]], Callable[P, RE[T]]]: ...
+) -> _CatchProtocol: ...
+
+
+@overload
+def catch[**P, T](  # pyright: ignore[reportOverlappingOverload]
+  f: Callable[P, Awaitable[T]],
+  /,
+) -> Callable[P, Awaitable[RE[T]]]: ...
 
 
 @overload
@@ -105,70 +131,40 @@ def catch[**P, T](f: Callable[P, T], /) -> Callable[P, RE[T]]: ...
 def catch(*exceptions_or_func: object) -> object:
   def _make_decorator(
     exceptions: tuple[type[Exception], ...],
-  ) -> Callable[[Callable[..., object]], Callable[..., RE[object]]]:
-    def decorator(f: Callable[..., object]) -> Callable[..., RE[object]]:
+  ) -> Callable[[Callable[..., object]], Callable[..., object]]:
+    def decorator(f: Callable[..., object]) -> Callable[..., object]:
+      if inspect.iscoroutinefunction(f):
+
+        @wraps(f)
+        async def async_wrapper(*args: object, **kwargs: object) -> RE[object]:
+          try:
+            return Ok(await cast("Awaitable[object]", f(*args, **kwargs)))
+          except exceptions as exc:
+            return Err(exc)
+
+        return async_wrapper
+
       @wraps(f)
-      def wrapper(*args: object, **kwargs: object) -> RE[object]:
+      def sync_wrapper(*args: object, **kwargs: object) -> RE[object]:
         try:
           return Ok(f(*args, **kwargs))
         except exceptions as exc:
           return Err(exc)
 
-      return wrapper
+      return sync_wrapper
 
     return decorator
 
   match exceptions_or_func:
-    case (f,) if callable(f) and not isinstance(f, type):
-      return _make_decorator((Exception,))(f)
+    case (f,) if callable(f) and not (
+      isinstance(f, type) and issubclass(f, BaseException)
+    ):
+      # Cast needed because non-exception classes are typed as type[Unknown]
+      return _make_decorator((Exception,))(cast("Callable[..., object]", f))
     case _:
       resolved = cast("tuple[type[Exception], ...]", exceptions_or_func) or (Exception,)
-      return _make_decorator(resolved)
-
-
-@overload
-def catch_async[E: Exception, **P, T](
-  *exceptions: type[E],
-) -> Callable[
-  [Callable[P, Awaitable[T]]],
-  Callable[P, Awaitable[RE[T]]],
-]: ...
-
-
-@overload
-def catch_async[**P, T](
-  f: Callable[P, Awaitable[T]],
-  /,
-) -> Callable[P, Awaitable[RE[T]]]: ...
-
-
-def catch_async(*exceptions_or_func: object) -> object:
-  def _make_decorator(
-    exceptions: tuple[type[Exception], ...],
-  ) -> Callable[
-    [Callable[..., Awaitable[object]]],
-    Callable[..., Awaitable[RE[object]]],
-  ]:
-    def decorator(
-      f: Callable[..., Awaitable[object]],
-    ) -> Callable[..., Awaitable[RE[object]]]:
-      @wraps(f)
-      async def wrapper(*args: object, **kwargs: object) -> RE[object]:
-        try:
-          return Ok(await f(*args, **kwargs))
-        except exceptions as exc:
-          return Err(exc)
-
-      return wrapper
-
-    return decorator
-
-  match exceptions_or_func:
-    case (f,) if callable(f) and not isinstance(f, type):
-      return _make_decorator((Exception,))(cast("Callable[..., Awaitable[object]]", f))
-    case _:
-      resolved = cast("tuple[type[Exception], ...]", exceptions_or_func) or (Exception,)
-      return _make_decorator(resolved)
+      # Cast needed because iscoroutinefunction dispatch is runtime
+      return cast("_CatchProtocol", _make_decorator(resolved))
 
 
 class _DisplayErrorProtocol(Protocol):

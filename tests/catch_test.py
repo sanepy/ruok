@@ -20,7 +20,7 @@ class TestCatchNoArgs:
 
   def test_raised_exception_wrapped_in_err(self):
     @catch
-    def f():
+    def f() -> None:
       raise ValueError("oops")
 
     result = f()
@@ -30,7 +30,7 @@ class TestCatchNoArgs:
 
   def test_does_not_catch_base_exception(self):
     @catch
-    def f():
+    def f() -> None:
       raise KeyboardInterrupt
 
     with pytest.raises(KeyboardInterrupt):
@@ -55,7 +55,7 @@ class TestCatchNoArgs:
 
   def test_err_q_raises_early_return_which_is_caught(self):
     @catch
-    def f():
+    def f() -> None:
       Err("fail").q()
 
     result = f()
@@ -66,7 +66,7 @@ class TestCatchNoArgs:
 
   def test_err_q_non_exception_value_has_no_cause(self):
     @catch
-    def f():
+    def f() -> None:
       Err("plain").q()
 
     result = f()
@@ -77,7 +77,7 @@ class TestCatchNoArgs:
     inner = ValueError("root")
 
     @catch
-    def f():
+    def f() -> None:
       Err(inner).q()
 
     result = f()
@@ -91,7 +91,7 @@ class TestCatchNoArgs:
     calls: list[str] = []
 
     @catch
-    def f():
+    def f() -> None:
       Err("stop").q()
       calls.append("unreachable")  # pyright: ignore[reportUnreachable]
 
@@ -102,7 +102,7 @@ class TestCatchNoArgs:
 class TestCatchWithExceptionTypes:
   def test_catches_specified_exception(self):
     @catch(ValueError)
-    def f():
+    def f() -> None:
       raise ValueError("val")
 
     result = f()
@@ -111,7 +111,7 @@ class TestCatchWithExceptionTypes:
 
   def test_does_not_catch_unspecified_exception(self):
     @catch(ValueError)
-    def f():
+    def f() -> None:
       raise TypeError("nope")
 
     with pytest.raises(TypeError):
@@ -119,7 +119,7 @@ class TestCatchWithExceptionTypes:
 
   def test_catches_multiple_exception_types(self):
     @catch(ValueError, TypeError)
-    def f(which: str):
+    def f(which: str) -> None:
       if which == "v":
         raise ValueError
       raise TypeError
@@ -133,7 +133,7 @@ class TestCatchWithExceptionTypes:
 
   def test_empty_call_catches_all_exceptions(self):
     @catch()
-    def f():
+    def f() -> None:
       raise RuntimeError("boom")
 
     result = f()
@@ -142,7 +142,7 @@ class TestCatchWithExceptionTypes:
 
   def test_early_return_not_caught_when_not_in_specified_types(self):
     @catch(ValueError)
-    def f():
+    def f() -> None:
       Err("escape").q()
 
     with pytest.raises(EarlyReturn) as exc_info:
@@ -154,7 +154,7 @@ class TestCatchWithExceptionTypes:
     inner = ValueError("chained")
 
     @catch(TypeError)
-    def f():
+    def f() -> None:
       Err(inner).q()
 
     with pytest.raises(EarlyReturn) as exc_info:

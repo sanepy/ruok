@@ -2,28 +2,28 @@ import asyncio
 
 import pytest
 
-from ruok import EarlyReturn, Err, Ok, catch_async
+from ruok import EarlyReturn, Err, Ok, catch
 
 
 class TestCatchAsyncNoArgs:
-  """@catch_async used directly - catches all Exception subclasses."""
+  """@catch used directly - catches all Exception subclasses."""
 
   async def test_successful_return_wrapped_in_ok(self):
-    @catch_async
+    @catch
     async def f() -> int:
       return 123
 
     assert await f() == Ok(123)
 
   async def test_none_return_wrapped_in_ok(self):
-    @catch_async
+    @catch
     async def f() -> None:
       pass
 
     assert await f() == Ok(None)
 
   async def test_raised_exception_wrapped_in_err(self):
-    @catch_async
+    @catch
     async def f():
       raise ValueError("oops")
 
@@ -36,7 +36,7 @@ class TestCatchAsyncNoArgs:
     class MyError(Exception):
       pass
 
-    @catch_async
+    @catch
     async def f():
       raise MyError("custom")
 
@@ -47,7 +47,7 @@ class TestCatchAsyncNoArgs:
   async def test_does_not_catch_base_exception(self):
     """BaseException (e.g. KeyboardInterrupt) is not a subclass of Exception."""
 
-    @catch_async
+    @catch
     async def f():
       raise KeyboardInterrupt
 
@@ -55,7 +55,7 @@ class TestCatchAsyncNoArgs:
       _ = await f()
 
   async def test_ok_q_returns_inner_value_and_continues(self):
-    @catch_async
+    @catch
     async def f() -> Ok[int] | Err[str]:
       v = Ok(10).q()
       return Ok(v + 1)
@@ -64,9 +64,9 @@ class TestCatchAsyncNoArgs:
 
   async def test_err_q_raises_early_return_which_is_caught(self):
     """Err.q() raises EarlyReturn, which is an Exception and therefore
-    caught by catch_async, yielding Err(EarlyReturn(...))."""
+    caught by catch, yielding Err(EarlyReturn(...))."""
 
-    @catch_async
+    @catch
     async def f():
       Err("fail").q()
 
@@ -79,7 +79,7 @@ class TestCatchAsyncNoArgs:
   async def test_err_q_non_exception_value_has_no_cause(self):
     """When the stored error is not a BaseException, __cause__ must be None."""
 
-    @catch_async
+    @catch
     async def f():
       Err("plain string").q()
 
@@ -94,7 +94,7 @@ class TestCatchAsyncNoArgs:
     `from` it, so __cause__ must be that exception."""
     inner = ValueError("inner exc")
 
-    @catch_async
+    @catch
     async def f():
       Err(inner).q()
 
@@ -109,7 +109,7 @@ class TestCatchAsyncNoArgs:
     """BaseException subclasses (not just Exception) are also chained."""
     inner = KeyboardInterrupt("kbd")
 
-    @catch_async
+    @catch
     async def f():
       Err(inner).q()
 
@@ -122,7 +122,7 @@ class TestCatchAsyncNoArgs:
   async def test_err_q_stops_execution_immediately(self):
     executed: list[str] = []
 
-    @catch_async
+    @catch
     async def f():
       Err("stop").q()
       executed.append("unreachable")  # pyright: ignore[reportUnreachable]
@@ -132,10 +132,10 @@ class TestCatchAsyncNoArgs:
 
 
 class TestCatchAsyncWithExceptionTypes:
-  """@catch_async(ExcType, ...) - catches only the specified exception types."""
+  """@catch(ExcType, ...) - catches only the specified exception types."""
 
   async def test_catches_specified_exception(self):
-    @catch_async(ValueError)
+    @catch(ValueError)
     async def f():
       raise ValueError("val error")
 
@@ -144,7 +144,7 @@ class TestCatchAsyncWithExceptionTypes:
     assert isinstance(result.err(), ValueError)
 
   async def test_does_not_catch_unspecified_exception(self):
-    @catch_async(ValueError)
+    @catch(ValueError)
     async def f():
       raise TypeError("not covered")
 
@@ -155,7 +155,7 @@ class TestCatchAsyncWithExceptionTypes:
     class MyValueError(ValueError):
       pass
 
-    @catch_async(ValueError)
+    @catch(ValueError)
     async def f():
       raise MyValueError("subclass")
 
@@ -164,7 +164,7 @@ class TestCatchAsyncWithExceptionTypes:
     assert isinstance(result.err(), MyValueError)
 
   async def test_catches_multiple_specified_exception_types(self):
-    @catch_async(ValueError, TypeError)
+    @catch(ValueError, TypeError)
     async def f(*, raise_value_error: bool):
       if raise_value_error:
         raise ValueError("v")
@@ -178,16 +178,14 @@ class TestCatchAsyncWithExceptionTypes:
     assert isinstance(r2.err(), TypeError)
 
   async def test_successful_return_still_wrapped_in_ok(self):
-    @catch_async(ValueError)
+    @catch(ValueError)
     async def f() -> int:
       return 99
 
     assert await f() == Ok(99)
 
   async def test_empty_call_catches_all_exceptions(self):
-    """@catch_async() with no args should behave like @catch_async."""
-
-    @catch_async()
+    @catch()
     async def f():
       raise RuntimeError("boom")
 
@@ -199,7 +197,7 @@ class TestCatchAsyncWithExceptionTypes:
     """EarlyReturn is an Exception. If only ValueError is specified,
     EarlyReturn raised by .q() will not be caught and will propagate."""
 
-    @catch_async(ValueError)
+    @catch(ValueError)
     async def f():
       Err("escape").q()
 
@@ -210,7 +208,7 @@ class TestCatchAsyncWithExceptionTypes:
     """Even when EarlyReturn escapes, __cause__ is set correctly."""
     inner = ValueError("chained")
 
-    @catch_async(TypeError)  # won't catch EarlyReturn
+    @catch(TypeError)  # won't catch EarlyReturn
     async def f():
       Err(inner).q()
 
@@ -220,9 +218,9 @@ class TestCatchAsyncWithExceptionTypes:
     assert exc_info.value.__cause__ is inner
 
   async def test_early_return_caught_when_exception_specified(self):
-    """EarlyReturn subclasses Exception, so catch_async(Exception) catches it."""
+    """EarlyReturn subclasses Exception, so catch(Exception) catches it."""
 
-    @catch_async(Exception)
+    @catch(Exception)
     async def f():
       Err("caught").q()
 
@@ -233,14 +231,14 @@ class TestCatchAsyncWithExceptionTypes:
 
 class TestCatchAsyncMetadataPreservation:
   async def test_preserves_function_name(self):
-    @catch_async
+    @catch
     async def my_async_fn():
       return 1
 
     assert my_async_fn.__name__ == "my_async_fn"
 
   async def test_preserves_docstring(self):
-    @catch_async
+    @catch
     async def f():
       """My docstring."""
       return 1
@@ -248,14 +246,14 @@ class TestCatchAsyncMetadataPreservation:
     assert f.__doc__ == "My docstring."
 
   async def test_preserves_name_with_exception_types(self):
-    @catch_async(ValueError)
+    @catch(ValueError)
     async def named_fn():
       return 1
 
     assert named_fn.__name__ == "named_fn"
 
   async def test_preserves_docstring_with_exception_types(self):
-    @catch_async(ValueError)
+    @catch(ValueError)
     async def f():
       """Another docstring."""
       return 1
@@ -265,28 +263,28 @@ class TestCatchAsyncMetadataPreservation:
 
 class TestCatchAsyncArguments:
   async def test_positional_args(self):
-    @catch_async
+    @catch
     async def f(x: int, y: int) -> int:
       return x + y
 
     assert await f(3, 4) == Ok(7)
 
   async def test_keyword_only_args(self):
-    @catch_async
+    @catch
     async def f(*, name: str) -> str:
       return f"hi {name}"
 
     assert await f(name="bob") == Ok("hi bob")
 
   async def test_mixed_positional_and_keyword_args(self):
-    @catch_async
+    @catch
     async def f(x: int, *, multiplier: int) -> int:
       return x * multiplier
 
     assert await f(3, multiplier=4) == Ok(12)
 
   async def test_exception_varies_by_arg(self):
-    @catch_async
+    @catch
     async def f(x: int):
       if x < 0:
         raise ValueError(f"negative: {x}")
@@ -300,7 +298,7 @@ class TestCatchAsyncArguments:
 
 class TestCatchAsyncWithAwait:
   async def test_awaits_inner_coroutine(self):
-    @catch_async
+    @catch
     async def f() -> int:
       await asyncio.sleep(0)
       return 1
@@ -308,7 +306,7 @@ class TestCatchAsyncWithAwait:
     assert await f() == Ok(1)
 
   async def test_exception_raised_after_await(self):
-    @catch_async
+    @catch
     async def f():
       await asyncio.sleep(0)
       raise ValueError("after await")
@@ -318,7 +316,7 @@ class TestCatchAsyncWithAwait:
     assert isinstance(result.err(), ValueError)
 
   async def test_err_q_after_await(self):
-    @catch_async
+    @catch
     async def f():
       await asyncio.sleep(0)
       Err("late fail").q()
@@ -331,7 +329,7 @@ class TestCatchAsyncWithAwait:
   async def test_err_q_exception_cause_preserved_after_await(self):
     inner = RuntimeError("root cause")
 
-    @catch_async
+    @catch
     async def f():
       await asyncio.sleep(0)
       Err(inner).q()
