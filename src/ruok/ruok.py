@@ -186,6 +186,21 @@ class _DisplayErrorProtocol(Protocol):
   ) -> Callable[..., object]: ...
 
 
+@overload
+def display_error[**P, T](
+  f: Callable[P, Awaitable[T]],
+  /,
+) -> Callable[P, Awaitable[T]]: ...
+
+
+@overload
+def display_error[**P, T](
+  f: Callable[P, T],
+  /,
+) -> Callable[P, T]: ...
+
+
+@overload
 def display_error(
   *,
   handler: Callable[[BaseException], None] | None = None,
@@ -194,7 +209,20 @@ def display_error(
   show_propagation: bool = False,
   raw_raise: bool = False,
   color: bool | None = None,
-) -> _DisplayErrorProtocol:
+) -> _DisplayErrorProtocol: ...
+
+
+def display_error(
+  f: Callable[..., object] | None = None,
+  /,
+  *,
+  handler: Callable[[BaseException], None] | None = None,
+  displayer: Callable[[BaseException], None] | None = None,
+  strip_early_returns: bool = True,
+  show_propagation: bool = False,
+  raw_raise: bool = False,
+  color: bool | None = None,
+) -> object:
   """Decorator that renders exceptions.
 
   Intended to wrap the program's top-level entry point (e.g., `main()`)
@@ -299,5 +327,8 @@ def display_error(
         sys.exit(1)
 
     return sync_wrapper
+
+  if f is not None:
+    return decorator(f)
 
   return cast("_DisplayErrorProtocol", decorator)
