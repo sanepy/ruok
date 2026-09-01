@@ -9,7 +9,7 @@ import traceback
 from collections.abc import Sequence
 from pathlib import Path
 from types import TracebackType
-from typing import TextIO
+from typing import TextIO, cast
 
 _ANSI_RE = re.compile(r"\033\[[^m]*m")
 
@@ -194,51 +194,70 @@ def error_displayer(
 
     return lines
 
-  content = _render_error(exc, color=color)
+  def _is_message(exc: BaseException) -> bool:
+    """An EarlyReturn with a non-exception payload and nothing chained
+    underneath is a message to the user, not an error to render."""
+    # Imported lazily because ruok.ruok imports this module at its top
+    from ruok.ruok import (  # noqa: PLC0415
+      EarlyReturn,
+    )
 
-  if show_propagation and hops:
+    if not isinstance(exc, EarlyReturn) or not exc.args:
+      return False
+    if isinstance(exc.args[0], BaseException):
+      return False
+    if exc.__cause__ is not None:
+      return False
+    return exc.__suppress_context__ or exc.__context__ is None
 
-    def _render_propagation(
-      hops: Sequence[TracebackType],
-      *,
-      color: bool,
-    ) -> list[str]:
-      """Render the EarlyReturn propagation footer."""
-      hop_frames = [_best_frame(tb) for tb in hops]
-      clean = [f for f in hop_frames if f is not None]
-      if not clean:
-        return []
+  if _is_message(exc):
+    content = [str(cast("object", exc.args[0]))]
+  else:
+    content = _render_error(exc, color=color)
 
-      cwd = Path.cwd()
-      lines: list[str] = [
-        "",
-        _style(
-          f"Propagated via EarlyReturn \u00d7 {len(clean)}:",
-          _BOLD,
-          _WHITE,
-          color=color,
-        ),
-      ]
+    if show_propagation and hops:
 
-      for hop in reversed(clean):
-        try:
-          path = Path(hop.filename).relative_to(cwd)
-        except ValueError:
-          path = Path(hop.filename)
+      def _render_propagation(
+        hops: Sequence[TracebackType],
+        *,
+        color: bool,
+      ) -> list[str]:
+        """Render the EarlyReturn propagation footer."""
+        hop_frames = [_best_frame(tb) for tb in hops]
+        clean = [f for f in hop_frames if f is not None]
+        if not clean:
+          return []
 
-        entry = "  " + _style("\u2192", _WHITE, color=color) + " "
-        if hop.name not in {"<module>", "<lambda>", "<genexpr>"}:
-          entry += _style(f"{hop.name}()", _BOLD, _DUSK_ROSE, color=color) + " "
-        entry += _style(path.name, _BOLD, _DUSK_ROSE, color=color)
-        entry += _style(f" {hop.lineno}", _BOLD, _DUSK_ROSE, color=color)
-        parent = str(path.parent)
-        if parent and parent != ".":
-          entry += " " + _style(f"{parent}/", _BOLD, _DUSK_ROSE, color=color)
-        lines.append(entry)
+        cwd = Path.cwd()
+        lines: list[str] = [
+          "",
+          _style(
+            f"Propagated via EarlyReturn \u00d7 {len(clean)}:",
+            _BOLD,
+            _WHITE,
+            color=color,
+          ),
+        ]
 
-      return lines
+        for hop in reversed(clean):
+          try:
+            path = Path(hop.filename).relative_to(cwd)
+          except ValueError:
+            path = Path(hop.filename)
 
-    content.extend(_render_propagation(hops, color=color))
+          entry = "  " + _style("\u2192", _WHITE, color=color) + " "
+          if hop.name not in {"<module>", "<lambda>", "<genexpr>"}:
+            entry += _style(f"{hop.name}()", _BOLD, _DUSK_ROSE, color=color) + " "
+          entry += _style(path.name, _BOLD, _DUSK_ROSE, color=color)
+          entry += _style(f" {hop.lineno}", _BOLD, _DUSK_ROSE, color=color)
+          parent = str(path.parent)
+          if parent and parent != ".":
+            entry += " " + _style(f"{parent}/", _BOLD, _DUSK_ROSE, color=color)
+          lines.append(entry)
+
+        return lines
+
+      content.extend(_render_propagation(hops, color=color))
 
   if content:
 

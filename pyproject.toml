@@ -46,6 +46,8 @@ ignore = ["BLE001", "C901", "COM812", "D", "N818", "PLR0913", "PLR0915"]
 "tests/*py" = ["ANN201", "ANN202", "EM101", "EM102", "INP001", "PLR2004", "S101", "TRY003"]
 
 [tool.basedpyright]
+reportImportCycles = false
+reportExplicitAny = false
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

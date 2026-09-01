@@ -245,9 +245,9 @@ def display_error(
           seen.add(id(exc))
           if exc.__traceback__ is not None:
             hops.append(exc.__traceback__)
-          # Cast needed because __cause__ is typed BaseException | None,
-          # but only Exception payloads can be chained via Err(...).q().
           if exc.__cause__ is not None:
+            # Cast needed because __cause__ is typed BaseException | None,
+            # but only Exception payloads can be chained via Err(...).q().
             exc = cast("Exception", exc.__cause__)
           elif exc.args and isinstance(exc.args[0], Exception):
             exc = exc.args[0]
