@@ -26,8 +26,8 @@
   main: |
     from ruok import Ok, Err
     ok_int: Ok[int] = Ok(42)
-    ok_float: Ok[float] = ok_int       # Ok - int is subtype of float
-    ok_int = ok_float                  # E: Incompatible types in assignment (expression has type "Ok[float]", variable has type "Ok[int]")  [assignment]
+    ok_float: Ok[float] = ok_int # Ok - int is subtype of float
+    ok_int = ok_float            # E: Incompatible types in assignment (expression has type "Ok[float]", variable has type "Ok[int]")  [assignment]
 
 - case: r_alias
   main: |
@@ -44,3 +44,91 @@
     res: RE[int] = Err(ValueError("boom"))
     if is_err(res):
         reveal_type(res.err()) # N: Revealed type is "Exception"
+
+- case: display_error_preserves_sync_signature
+  main: |
+    from ruok import display_error
+
+    @display_error()
+    def foo(x: int) -> str:
+        return ""
+
+    reveal_type(foo) # N: Revealed type is "def (x: int) -> str"
+
+- case: display_error_bare_preserves_sync_signature
+  main: |
+    from ruok import display_error
+
+    @display_error
+    def foo(x: int) -> str:
+        return ""
+
+    reveal_type(foo) # N: Revealed type is "def (x: int) -> str"
+
+- case: display_error_preserves_async_signature
+  main: |
+    from ruok import display_error
+
+    @display_error()
+    async def foo(x: int) -> str:
+        return ""
+
+    reveal_type(foo) # N: Revealed type is "def (x: int) -> typing.Coroutine[Any, Any, str]"
+
+- case: display_error_bare_preserves_async_signature
+  main: |
+    from ruok import display_error
+
+    @display_error
+    async def foo(x: int) -> str:
+        return ""
+
+    reveal_type(foo) # N: Revealed type is "def (x: int) -> typing.Coroutine[Any, Any, str]"
+
+- case: catch_bare_sync_preserves_signature
+  main: |
+    from ruok import catch
+    @catch
+    def f(x: int) -> str:
+        return ""
+    reveal_type(f) # N: Revealed type is "def (x: int) -> ruok.ruok.Ok[str] | ruok.ruok.Err[Exception]"
+
+- case: catch_bare_async_preserves_signature
+  main: |
+    from ruok import catch
+    @catch
+    async def f(x: int) -> str:
+        return ""
+    reveal_type(f) # N: Revealed type is "def (x: int) -> typing.Coroutine[Any, Any, ruok.ruok.Ok[str] | ruok.ruok.Err[Exception]]"
+
+- case: catch_brackets_sync_preserves_signature
+  main: |
+    from ruok import catch
+    @catch()
+    def f(x: int) -> str:
+        return ""
+    reveal_type(f) # N: Revealed type is "def (x: int) -> ruok.ruok.Ok[str] | ruok.ruok.Err[Exception]"
+
+- case: catch_brackets_async_preserves_signature
+  main: |
+    from ruok import catch
+    @catch()
+    async def f(x: int) -> str:
+        return ""
+    reveal_type(f) # N: Revealed type is "def (x: int) -> typing.Coroutine[Any, Any, ruok.ruok.Ok[str] | ruok.ruok.Err[Exception]]"
+
+- case: catch_with_exceptions_sync_preserves_signature
+  main: |
+    from ruok import catch
+    @catch(ValueError)
+    def f(x: int) -> str:
+        return ""
+    reveal_type(f) # N: Revealed type is "def (x: int) -> ruok.ruok.Ok[str] | ruok.ruok.Err[Exception]"
+
+- case: catch_with_exceptions_async_preserves_signature
+  main: |
+    from ruok import catch
+    @catch(ValueError)
+    async def f(x: int) -> str:
+        return ""
+    reveal_type(f) # N: Revealed type is "def (x: int) -> typing.Coroutine[Any, Any, ruok.ruok.Ok[str] | ruok.ruok.Err[Exception]]"
