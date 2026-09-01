@@ -105,19 +105,16 @@ class TestCatchAsyncNoArgs:
     assert early.args[0] is inner
     assert early.__cause__ is inner
 
-  async def test_err_q_base_exception_value_chained_as_cause(self):
-    """BaseException subclasses (not just Exception) are also chained."""
+  async def test_err_q_base_exception_value_pierces(self):
+    """BaseException subclasses (not Exception) pierce @catch untouched."""
     inner = KeyboardInterrupt("kbd")
 
     @catch
     async def f():
       Err(inner).q()
 
-    result = await f()
-    assert isinstance(result, Err)
-    early = result.err()
-    assert isinstance(early, EarlyReturn)
-    assert early.__cause__ is inner
+    with pytest.raises(KeyboardInterrupt):
+      _ = await f()
 
   async def test_err_q_stops_execution_immediately(self):
     executed: list[str] = []

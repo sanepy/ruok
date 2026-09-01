@@ -72,7 +72,9 @@ class Err[E]:
 
   def q(self) -> Never:
     err = self.err()
-    raise EarlyReturn(err) from (err if isinstance(err, BaseException) else None)
+    if isinstance(err, BaseException) and not isinstance(err, Exception):
+      raise err
+    raise EarlyReturn(err) from (err if isinstance(err, Exception) else None)
 
 
 type Res[T, E] = Ok[T] | Err[E]
@@ -243,12 +245,12 @@ def display_error(
     A decorator capable of wrapping both sync and async functions.
   """
 
-  def _handle_exception(exc: BaseException) -> None:
+  def _handle_exception(exc: Exception) -> None:
     if strip_early_returns:
 
       def _strip_early_returns(
-        exc: BaseException,
-      ) -> tuple[BaseException, list[TracebackType]]:
+        exc: Exception,
+      ) -> tuple[Exception, list[TracebackType]]:
         seen: set[int] = set()
         hops: list[TracebackType] = []
 
@@ -256,9 +258,11 @@ def display_error(
           seen.add(id(exc))
           if exc.__traceback__ is not None:
             hops.append(exc.__traceback__)
+          # Cast needed because __cause__ is typed BaseException | None,
+          # but only Exception payloads can be chained via Err(...).q().
           if exc.__cause__ is not None:
-            exc = exc.__cause__
-          elif exc.args and isinstance(exc.args[0], BaseException):
+            exc = cast("Exception", exc.__cause__)
+          elif exc.args and isinstance(exc.args[0], Exception):
             exc = exc.args[0]
           else:
             break
