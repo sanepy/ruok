@@ -205,11 +205,12 @@ def display_error[**P, T](
 @overload
 def display_error(
   *,
-  handler: Callable[[BaseException], None] | None = None,
-  displayer: Callable[[BaseException], None] | None = None,
+  handler: Callable[[Exception], None] | None = None,
+  displayer: Callable[[Exception], None] | None = None,
   strip_early_returns: bool = True,
   show_propagation: bool = False,
   raw_raise: bool = False,
+  catch_keyboard_interrupt: bool = True,
   color: bool | None = None,
 ) -> _DisplayErrorProtocol: ...
 
@@ -218,11 +219,12 @@ def display_error(
   f: Callable[..., object] | None = None,
   /,
   *,
-  handler: Callable[[BaseException], None] | None = None,
-  displayer: Callable[[BaseException], None] | None = None,
+  handler: Callable[[Exception], None] | None = None,
+  displayer: Callable[[Exception], None] | None = None,
   strip_early_returns: bool = True,
   show_propagation: bool = False,
   raw_raise: bool = False,
+  catch_keyboard_interrupt: bool = True,
   color: bool | None = None,
 ) -> object:
   """Decorator that renders exceptions.
@@ -237,6 +239,9 @@ def display_error(
     show_propagation: Renders an additional footer trace detailing
       each frame where an `EarlyReturn` was propagated.
     raw_raise: Disables exception interception and lets errors propagate normally.
+    catch_keyboard_interrupt: When `True` (default), catches `KeyboardInterrupt`,
+      renders a minimal panel, and exits with code `130` (128 + SIGINT). When
+      `False`, the interrupt propagates untouched.
     color: Force-enables (`True`) or disables (`False`) ANSI color output. When
       `None`, auto-detects support via TTY checks and `NO_COLOR`/`FORCE_COLOR`
       environment variables.
@@ -314,8 +319,13 @@ def display_error(
       @wraps(f)
       async def async_wrapper(*args: object, **kwargs: object) -> object:
         try:
-          return cast("object", await f(*args, **kwargs))
-        except (Exception, KeyboardInterrupt) as exc:
+          return await cast("Awaitable[object]", f(*args, **kwargs))
+        except KeyboardInterrupt:
+          if catch_keyboard_interrupt:
+            error_displayer(KeyboardInterrupt(), color=color)
+            sys.exit(130)
+          raise
+        except Exception as exc:
           _handle_exception(exc)
           sys.exit(1)
 
@@ -325,7 +335,12 @@ def display_error(
     def sync_wrapper(*args: object, **kwargs: object) -> object:
       try:
         return f(*args, **kwargs)
-      except (Exception, KeyboardInterrupt) as exc:
+      except KeyboardInterrupt:
+        if catch_keyboard_interrupt:
+          error_displayer(KeyboardInterrupt(), color=color)
+          sys.exit(130)
+        raise
+      except Exception as exc:
         _handle_exception(exc)
         sys.exit(1)
 
