@@ -1,9 +1,10 @@
 import inspect
 import sys
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable, Coroutine
 from functools import wraps
 from types import TracebackType
 from typing import (
+  Any,
   Never,
   Protocol,
   TypeIs,
@@ -98,8 +99,8 @@ class _CatchProtocol(Protocol):
   @overload
   def __call__[**P, T](  # pyright: ignore[reportOverlappingOverload]
     self,
-    f: Callable[P, Awaitable[T]],
-  ) -> Callable[P, Awaitable[RE[T]]]: ...
+    f: Callable[P, Coroutine[Any, Any, T]],
+  ) -> Callable[P, Coroutine[Any, Any, RE[T]]]: ...
 
   @overload
   def __call__[**P, T](
@@ -121,9 +122,9 @@ def catch[E: Exception](
 
 @overload
 def catch[**P, T](  # pyright: ignore[reportOverlappingOverload]
-  f: Callable[P, Awaitable[T]],
+  f: Callable[P, Coroutine[Any, Any, T]],
   /,
-) -> Callable[P, Awaitable[RE[T]]]: ...
+) -> Callable[P, Coroutine[Any, Any, RE[T]]]: ...
 
 
 @overload
@@ -140,7 +141,7 @@ def catch(*exceptions_or_func: object) -> object:
         @wraps(f)
         async def async_wrapper(*args: object, **kwargs: object) -> RE[object]:
           try:
-            return Ok(await cast("Awaitable[object]", f(*args, **kwargs)))
+            return Ok(await cast("Coroutine[Any, Any, object]", f(*args, **kwargs)))
           except exceptions as exc:
             return Err(exc)
 
@@ -300,7 +301,7 @@ def display_error(
       @wraps(f)
       async def async_wrapper(*args: object, **kwargs: object) -> object:
         try:
-          return await cast("Awaitable[object]", f(*args, **kwargs))
+          return await cast("Coroutine[Any, Any, object]", f(*args, **kwargs))
         except KeyboardInterrupt:
           if catch_keyboard_interrupt:
             error_displayer(KeyboardInterrupt(), color=color)
