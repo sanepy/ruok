@@ -170,29 +170,10 @@ def catch(*exceptions_or_func: object) -> object:
 
 
 class _DisplayErrorProtocol(Protocol):
-  @overload
-  def __call__[**P, T](
-    self,
-    f: Callable[P, Awaitable[T]],
-  ) -> Callable[P, Awaitable[T]]: ...
-
-  @overload
   def __call__[**P, T](
     self,
     f: Callable[P, T],
   ) -> Callable[P, T]: ...
-
-  def __call__(
-    self,
-    f: Callable[..., object],
-  ) -> Callable[..., object]: ...
-
-
-@overload
-def display_error[**P, T](
-  f: Callable[P, Awaitable[T]],
-  /,
-) -> Callable[P, Awaitable[T]]: ...
 
 
 @overload
