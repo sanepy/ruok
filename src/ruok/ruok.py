@@ -194,6 +194,7 @@ def display_error(
   raw_raise: bool = False,
   catch_keyboard_interrupt: bool = True,
   color: bool | None = None,
+  border: bool = True,
 ) -> _DisplayErrorProtocol: ...
 
 
@@ -208,6 +209,7 @@ def display_error(
   raw_raise: bool = False,
   catch_keyboard_interrupt: bool = True,
   color: bool | None = None,
+  border: bool = True,
 ) -> object:
   """Decorator that renders exceptions.
 
@@ -227,6 +229,8 @@ def display_error(
     color: Force-enables (`True`) or disables (`False`) ANSI color output. When
       `None`, auto-detects support via TTY checks and `NO_COLOR`/`FORCE_COLOR`
       environment variables.
+    border: Renders the output inside an ANSI border panel. When `False`,
+      prints the content lines bare.
 
   Returns:
     A decorator capable of wrapping both sync and async functions.
@@ -265,22 +269,24 @@ def display_error(
         handler(cleaned)
       except Exception as handler_exc:
         handler_exc.__suppress_context__ = True
-        _ = sys.stderr.write("Custom handler raised an exception:")
-        error_displayer(handler_exc, color=color)
+        _ = sys.stderr.write("Custom handler raised an exception:\n")
+        error_displayer(handler_exc, color=color, border=border)
+        _ = sys.stderr.write("Original exception:\n")
 
     if displayer is not None:
       try:
         displayer(cleaned)
       except Exception as displayer_exc:
         displayer_exc.__suppress_context__ = True
-        _ = sys.stderr.write("Custom displayer raised an exception:")
-        error_displayer(displayer_exc, color=color)
-        _ = sys.stderr.write("Original exception:")
+        _ = sys.stderr.write("Custom displayer raised an exception:\n")
+        error_displayer(displayer_exc, color=color, border=border)
+        _ = sys.stderr.write("Original exception:\n")
         error_displayer(
           cleaned,
           hops,
           color=color,
           show_propagation=show_propagation,
+          border=border,
         )
     else:
       error_displayer(
@@ -288,6 +294,7 @@ def display_error(
         hops,
         color=color,
         show_propagation=show_propagation,
+        border=border,
       )
 
   def decorator(
@@ -304,7 +311,7 @@ def display_error(
           return await cast("Coroutine[Any, Any, object]", f(*args, **kwargs))
         except KeyboardInterrupt:
           if catch_keyboard_interrupt:
-            error_displayer(KeyboardInterrupt(), color=color)
+            error_displayer(KeyboardInterrupt(), color=color, border=border)
             sys.exit(130)
           raise
         except Exception as exc:
@@ -319,7 +326,7 @@ def display_error(
         return f(*args, **kwargs)
       except KeyboardInterrupt:
         if catch_keyboard_interrupt:
-          error_displayer(KeyboardInterrupt(), color=color)
+          error_displayer(KeyboardInterrupt(), color=color, border=border)
           sys.exit(130)
         raise
       except Exception as exc:

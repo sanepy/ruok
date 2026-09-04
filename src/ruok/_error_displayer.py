@@ -31,6 +31,7 @@ def error_displayer(
   *,
   show_propagation: bool = False,
   color: bool | None = None,
+  border: bool = True,
   file: TextIO | None = None,
 ) -> None:
   """Render an exception with ANSI styling to a stream."""
@@ -307,29 +308,34 @@ def error_displayer(
       text = "".join(out) + "\u2026"
       return f"{text}{_RESET}" if "\033" in text else text
 
-    def _draw_panel(
-      content: list[str],
-      *,
-      color: bool,
-      stream: TextIO,
-      wrap_width: int,
-    ) -> None:
-      lines = [_ensure_width(line, width=wrap_width) for line in content]
-      max_width = max(
-        (_visible_len(line) for line in lines),
-        default=0,
-      )
-      border = "\u2500" * (max_width + 2)
+    lines = [_ensure_width(line, width=wrap_width) for line in content]
 
-      top = _style(f"\u256d{border}\u256e", _PERIWINKLE, color=color)
-      bot = _style(f"\u2570{border}\u256f", _PERIWINKLE, color=color)
-      left = _style("\u2502", _PERIWINKLE, color=color)
-      right = _style("\u2502", _PERIWINKLE, color=color)
-
-      _ = stream.write(f"\n{top}\n")
+    if not border:
       for line in lines:
-        padding = " " * (max_width - _visible_len(line))
-        _ = stream.write(f"{left} {line}{padding} {right}\n")
-      _ = stream.write(f"{bot}\n")
+        _ = stream.write(f"{line}\n")
+    else:
 
-    _draw_panel(content, color=color, stream=stream, wrap_width=wrap_width)
+      def _draw_panel(
+        lines: list[str],
+        *,
+        color: bool,
+        stream: TextIO,
+      ) -> None:
+        max_width = max(
+          (_visible_len(line) for line in lines),
+          default=0,
+        )
+        edge = "\u2500" * (max_width + 2)
+
+        top = _style(f"\u256d{edge}\u256e", _PERIWINKLE, color=color)
+        bot = _style(f"\u2570{edge}\u256f", _PERIWINKLE, color=color)
+        left = _style("\u2502", _PERIWINKLE, color=color)
+        right = _style("\u2502", _PERIWINKLE, color=color)
+
+        _ = stream.write(f"{top}\n")
+        for line in lines:
+          padding = " " * (max_width - _visible_len(line))
+          _ = stream.write(f"{left} {line}{padding} {right}\n")
+        _ = stream.write(f"{bot}\n")
+
+      _draw_panel(lines, color=color, stream=stream)
