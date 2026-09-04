@@ -1,6 +1,7 @@
 import linecache
 import os
 import re
+import shutil
 import site
 import sys
 import sysconfig
@@ -12,6 +13,9 @@ from types import TracebackType
 from typing import TextIO, cast
 
 _ANSI_RE = re.compile(r"\033\[[^m]*m")
+_TOKEN_RE = re.compile(f"{_ANSI_RE.pattern}|.")
+
+_MIN_CONTENT_WIDTH = 20
 
 _RESET = "\033[0m"
 _BOLD = "\033[1m"
@@ -47,6 +51,11 @@ def error_displayer(
 
   color = _supports_color(stream, override=color)
 
+  border_and_padding = 4
+  wrap_width = max(
+    shutil.get_terminal_size().columns - border_and_padding, _MIN_CONTENT_WIDTH
+  )
+
   noise_prefixes: tuple[Path, ...] = tuple(
     Path(p).resolve()
     for p in (
@@ -58,6 +67,12 @@ def error_displayer(
 
   def _visible_len(s: str) -> int:
     return len(_ANSI_RE.sub("", s))
+
+  def _wrap(text: str, *, width: int) -> list[str]:
+    out: list[str] = []
+    for line in text.splitlines() or [""]:
+      out.extend(textwrap.wrap(line, width=width) or [""])
+    return out
 
   def _style(text: str, *codes: str, color: bool) -> str:
     if not color or not codes:
@@ -87,6 +102,7 @@ def error_displayer(
     exc: BaseException,
     *,
     color: bool,
+    wrap_width: int,
   ) -> list[str]:
     def _cause_chain(exc: BaseException) -> list[BaseException]:
       seen: set[int] = set()
@@ -105,13 +121,25 @@ def error_displayer(
     cwd: Path = Path.cwd()
     lines: list[str] = []
 
-    for idx, error in enumerate(chain):
+    def _render_header(
+      error: BaseException,
+    ) -> list[str]:
       err_type: str = type(error).__qualname__
       err_msg: str = str(error)
+      tag = f"[{err_type}]"
+      text = f"{err_msg.strip()} {tag}" if err_msg else tag
+      wrapped = _wrap(text, width=wrap_width)
 
-      msg = f"{_style(err_msg, _BOLD, _DEEP_CRIMSON, color=color)} " if err_msg else ""
-      header = f"{msg}{_style(f'[{err_type}]', _BOLD, _WHITE, color=color)}"
-      lines.append(header)
+      styled = [_style(t, _BOLD, _DEEP_CRIMSON, color=color) for t in wrapped[:-1]]
+      last_msg = wrapped[-1][: -len(tag)]
+      styled.append(
+        _style(last_msg, _BOLD, _DEEP_CRIMSON, color=color)
+        + _style(tag, _BOLD, _WHITE, color=color)
+      )
+      return styled
+
+    for idx, error in enumerate(chain):
+      lines.extend(_render_header(error))
 
       frame = _best_frame(error.__traceback__)
       if not (frame and frame.filename and frame.lineno):
@@ -197,7 +225,8 @@ def error_displayer(
   def _is_message(exc: BaseException) -> bool:
     """An EarlyReturn with a non-exception payload and nothing chained
     underneath is a message to the user, not an error to render."""
-    # Imported lazily because ruok.ruok imports this module at its top
+    # Imported lazily because ruok.ruok imports this module at its top, and
+    # creating a new file is not warranted
     from ruok.ruok import (  # noqa: PLC0415
       EarlyReturn,
     )
@@ -211,9 +240,9 @@ def error_displayer(
     return exc.__suppress_context__ or exc.__context__ is None
 
   if _is_message(exc):
-    content = [str(cast("object", exc.args[0]))]
+    content = _wrap(str(cast("object", exc.args[0])), width=wrap_width)
   else:
-    content = _render_error(exc, color=color)
+    content = _render_error(exc, color=color, wrap_width=wrap_width)
 
     if show_propagation and hops:
 
@@ -261,14 +290,33 @@ def error_displayer(
 
   if content:
 
+    def _ensure_width(s: str, *, width: int) -> str:
+      if _visible_len(s) <= width:
+        return s
+      out: list[str] = []
+      visible = 0
+      for m in _TOKEN_RE.finditer(s):
+        tok = m.group()
+        if tok.startswith("\033"):
+          out.append(tok)
+          continue
+        if visible >= width - 1:
+          break
+        out.append(tok)
+        visible += 1
+      text = "".join(out) + "\u2026"
+      return f"{text}{_RESET}" if "\033" in text else text
+
     def _draw_panel(
       content: list[str],
       *,
       color: bool,
       stream: TextIO,
+      wrap_width: int,
     ) -> None:
+      lines = [_ensure_width(line, width=wrap_width) for line in content]
       max_width = max(
-        (_visible_len(line) for line in content),
+        (_visible_len(line) for line in lines),
         default=0,
       )
       border = "\u2500" * (max_width + 2)
@@ -279,9 +327,9 @@ def error_displayer(
       right = _style("\u2502", _PERIWINKLE, color=color)
 
       _ = stream.write(f"\n{top}\n")
-      for line in content:
+      for line in lines:
         padding = " " * (max_width - _visible_len(line))
         _ = stream.write(f"{left} {line}{padding} {right}\n")
       _ = stream.write(f"{bot}\n")
 
-    _draw_panel(content, color=color, stream=stream)
+    _draw_panel(content, color=color, stream=stream, wrap_width=wrap_width)
