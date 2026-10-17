@@ -24,19 +24,6 @@ def test_ok() -> None:
 
   assert Ok(None) is not None
 
-  s = {Ok(1), Ok(2), Ok(1)}
-  assert len(s) == 2
-
-  d = {Ok("k"): "v"}
-  assert d[Ok("k")] == "v"
-
-  assert hash(Ok(1)) == hash(Ok(1))
-
-  assert hash(Ok(1)) != hash(Err(1))
-
-  with pytest.raises(TypeError):
-    _ = hash(Ok([1, 2, 3]))
-
   assert Ok("result").q() == "result"
 
   _ = Ok(0).q()
@@ -64,19 +51,6 @@ def test_err():
   assert Err(1) != 1
 
   assert Err(None) is not None
-
-  s = {Err(1), Err(2), Err(1)}
-  assert len(s) == 2
-
-  d = {Err("k"): "v"}
-  assert d[Err("k")] == "v"
-
-  assert hash(Err(1)) == hash(Err(1))
-
-  assert hash(Err(1)) != hash(Ok(1))
-
-  with pytest.raises(TypeError):
-    _ = hash(Err([1, 2, 3]))
 
   with pytest.raises(EarlyReturn):
     _ = Err("result").q()

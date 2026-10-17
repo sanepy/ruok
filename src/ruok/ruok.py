@@ -35,10 +35,6 @@ class Ok[T]:
   def __eq__(self, other: object) -> bool:
     return isinstance(other, Ok) and self._value == other._value
 
-  @override
-  def __hash__(self) -> int:
-    return hash((True, self._value))
-
   def ok(self) -> T:
     return self._value
 
@@ -63,10 +59,6 @@ class Err[E]:
   @override
   def __eq__(self, other: object) -> bool:
     return isinstance(other, Err) and self._value == other._value
-
-  @override
-  def __hash__(self) -> int:
-    return hash((False, self._value))
 
   def err(self) -> E:
     return self._value
