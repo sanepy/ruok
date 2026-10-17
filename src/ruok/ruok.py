@@ -124,42 +124,44 @@ def catch[**P, T](f: Callable[P, T], /) -> Callable[P, RE[T]]: ...
 
 
 def catch(*exceptions_or_func: object) -> object:
-  def _make_decorator(
-    exceptions: tuple[type[Exception], ...],
-  ) -> Callable[[Callable[..., object]], Callable[..., object]]:
-    def decorator(f: Callable[..., object]) -> Callable[..., object]:
-      if inspect.iscoroutinefunction(f):
-
-        @wraps(f)
-        async def async_wrapper(*args: object, **kwargs: object) -> RE[object]:
-          try:
-            return Ok(await cast("Coroutine[Any, Any, object]", f(*args, **kwargs)))
-          except exceptions as exc:
-            return Err(exc)
-
-        return async_wrapper
-
-      @wraps(f)
-      def sync_wrapper(*args: object, **kwargs: object) -> RE[object]:
-        try:
-          return Ok(f(*args, **kwargs))
-        except exceptions as exc:
-          return Err(exc)
-
-      return sync_wrapper
-
-    return decorator
+  bare_catch_s_func: Callable[..., object] | None = None
 
   match exceptions_or_func:
     case (f,) if callable(f) and not (
       isinstance(f, type) and issubclass(f, BaseException)
     ):
+      excs: tuple[type[Exception], ...] = (Exception,)
       # Cast needed because non-exception classes are typed as type[Unknown]
-      return _make_decorator((Exception,))(cast("Callable[..., object]", f))
+      bare_catch_s_func = cast("Callable[..., object]", f)
     case _:
-      resolved = cast("tuple[type[Exception], ...]", exceptions_or_func) or (Exception,)
-      # Cast needed because iscoroutinefunction dispatch is runtime
-      return cast("_CatchProtocol", _make_decorator(resolved))
+      excs = cast("tuple[type[Exception], ...]", exceptions_or_func) or (Exception,)
+
+  def _decorator(f: Callable[..., object]) -> Callable[..., object]:
+    if inspect.iscoroutinefunction(f):
+
+      @wraps(f)
+      async def async_wrapper(*args: object, **kwargs: object) -> RE[object]:
+        try:
+          return Ok(await cast("Coroutine[Any, Any, object]", f(*args, **kwargs)))
+        except excs as exc:
+          return Err(exc)
+
+      return async_wrapper
+
+    @wraps(f)
+    def sync_wrapper(*args: object, **kwargs: object) -> RE[object]:
+      try:
+        return Ok(f(*args, **kwargs))
+      except excs as exc:
+        return Err(exc)
+
+    return sync_wrapper
+
+  if bare_catch_s_func is not None:
+    return _decorator(bare_catch_s_func)
+
+  # Cast needed because iscoroutinefunction dispatch is runtime
+  return cast("_CatchProtocol", _decorator)
 
 
 class _DisplayErrorProtocol(Protocol):
@@ -289,7 +291,7 @@ def display_error(
         border=border,
       )
 
-  def decorator(
+  def _decorator(
     f: Callable[..., object],
   ) -> Callable[..., object]:
     if raw_raise:
@@ -328,6 +330,6 @@ def display_error(
     return sync_wrapper
 
   if f is not None:
-    return decorator(f)
+    return _decorator(f)
 
-  return cast("_DisplayErrorProtocol", decorator)
+  return cast("_DisplayErrorProtocol", _decorator)
