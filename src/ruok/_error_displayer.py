@@ -63,6 +63,7 @@ def error_displayer(
       sysconfig.get_paths()["stdlib"],
       *(site.getsitepackages() if hasattr(site, "getsitepackages") else []),
       *([site.getusersitepackages()] if hasattr(site, "getusersitepackages") else []),
+      Path(__file__).parent,  # No-op when installed to site-packages
     )
   )
 
