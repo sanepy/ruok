@@ -22,10 +22,6 @@
               uv
             ];
 
-            env = lib.optionalAttrs pkgs.stdenv.isLinux {
-              LD_LIBRARY_PATH = lib.makeLibraryPath pkgs.pythonManylinuxPackages.manylinux1;
-            };
-
             shellHook = ''
               unset PYTHONPATH
               uv sync
