@@ -72,7 +72,6 @@ class Err[E]:
 
 type Res[T, E] = Ok[T] | Err[E]
 type RE[T] = Ok[T] | Err[Exception]
-type RS[T] = Ok[T] | Err[str]
 
 
 def is_ok[T, E](result: Res[T, E]) -> TypeIs[Ok[T]]:

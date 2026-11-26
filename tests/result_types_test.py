@@ -1,6 +1,6 @@
 import pytest
 
-from ruok import RE, RS, Err, Ok, Res, is_err, is_ok
+from ruok import RE, Err, Ok, Res, is_err, is_ok
 
 
 def test_res_ok():
@@ -33,7 +33,7 @@ def test_re_err():
 
 
 def test_r_ok():
-  res: RS[float] = Ok(6.0)
+  res: Res[float, str] = Ok(6.0)
   b = 6.0
   if is_ok(res):
     assert res.ok() + b == 12.0
@@ -42,7 +42,7 @@ def test_r_ok():
 
 
 def test_r_err():
-  res: RS[float] = Err("not a number")
+  res: Res[float, str] = Err("not a number")
   if is_err(res):
     assert "asdf" + res.err() == "asdfnot a number"
   else:
@@ -58,6 +58,6 @@ def test_res_roundtrip_ok(value: object):
 
 @pytest.mark.parametrize("value", ["err", "timeout", ""])
 def test_r_roundtrip_err(value: str):
-  res: RS[int] = Err(value)
+  res: Res[int, str] = Err(value)
   assert is_err(res)
   assert res.err() == value

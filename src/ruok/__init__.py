@@ -1,6 +1,5 @@
 from ruok.ruok import (
   RE,
-  RS,
   EarlyReturn,
   Err,
   Ok,
@@ -13,7 +12,6 @@ from ruok.ruok import (
 
 __all__ = [
   "RE",
-  "RS",
   "EarlyReturn",
   "Err",
   "Ok",

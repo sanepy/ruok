@@ -29,15 +29,6 @@
     ok_float: Ok[float] = ok_int # Ok - int is subtype of float
     ok_int = ok_float            # E: Incompatible types in assignment (expression has type "Ok[float]", variable has type "Ok[int]")  [assignment]
 
-- case: r_alias
-  main: |
-    from ruok import Ok, Err, RS, is_ok, is_err
-    res: RS[float] = Ok(1.0)
-    if is_ok(res):
-        reveal_type(res.ok()) # N: Revealed type is "float"
-    else:
-        reveal_type(res.err()) # N: Revealed type is "str"
-
 - case: re_alias_err_is_exception
   main: |
     from ruok import Err, RE, is_err
