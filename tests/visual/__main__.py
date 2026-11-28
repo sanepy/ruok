@@ -62,9 +62,8 @@ def main() -> None:
     for name, scenario in SCENARIOS.items():
       if name not in INTERACTIVE:
         _run(name, scenario)
-    _out(
-      f"(interactive ones need to be run individually: {', '.join(sorted(INTERACTIVE))})"
-    )
+    skipped = ", ".join(sorted(INTERACTIVE))
+    _out(f"(interactive ones need to be run individually: {skipped})")
     return
 
   for name in args:
