@@ -25,3 +25,7 @@ test: (ensure "pytest")
 [group('qa')]
 viz *args:
   uv run python -m tests.visual {{args}}
+
+[group('lifecycle')]
+release:
+  bash scripts/release.sh
