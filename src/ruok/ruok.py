@@ -291,6 +291,12 @@ def display_error(
         border=border,
       )
 
+  def _handle_keyboard_interrupt() -> None:
+    # The tty echoes ^C on SIGINT; start the panel on a fresh line.
+    if sys.stderr.isatty():
+      _ = sys.stderr.write("\n")
+    error_displayer(KeyboardInterrupt(), color=color, border=border)
+
   def _decorator(
     f: Callable[..., object],
   ) -> Callable[..., object]:
@@ -305,7 +311,7 @@ def display_error(
           return await cast("Coroutine[Any, Any, object]", f(*args, **kwargs))
         except KeyboardInterrupt:
           if catch_keyboard_interrupt:
-            error_displayer(KeyboardInterrupt(), color=color, border=border)
+            _handle_keyboard_interrupt()
             sys.exit(130)
           raise
         except Exception as exc:
@@ -320,7 +326,7 @@ def display_error(
         return f(*args, **kwargs)
       except KeyboardInterrupt:
         if catch_keyboard_interrupt:
-          error_displayer(KeyboardInterrupt(), color=color, border=border)
+          _handle_keyboard_interrupt()
           sys.exit(130)
         raise
       except Exception as exc:
