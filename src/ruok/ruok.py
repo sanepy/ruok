@@ -242,6 +242,7 @@ def display_error(
           seen.add(id(exc))
           if exc.__traceback__ is not None:
             hops.append(exc.__traceback__)
+          # .q() links layers through __cause__, hand-raised wraps through the payload.
           if exc.__cause__ is not None:
             # Cast needed because __cause__ is typed BaseException | None,
             # but only Exception payloads can be chained via Err(...).q().

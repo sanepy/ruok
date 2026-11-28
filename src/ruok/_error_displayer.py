@@ -225,21 +225,33 @@ def error_displayer(
     return lines
 
   def _is_message(exc: BaseException) -> bool:
-    """An EarlyReturn with a non-exception payload and nothing chained
-    underneath is a message to the user, not an error to render."""
+    """An EarlyReturn chain whose innermost layer carries a non-exception
+    payload, with no real error chained at any layer, is a message to the
+    user, not an error to render."""
     # Imported lazily because ruok.ruok imports this module at its top, and
     # creating a new file is not warranted
     from ruok.ruok import (  # noqa: PLC0415
       EarlyReturn,
     )
 
-    if not isinstance(exc, EarlyReturn) or not exc.args:
-      return False
-    if isinstance(exc.args[0], BaseException):
-      return False
-    if exc.__cause__ is not None:
-      return False
-    return exc.__suppress_context__ or exc.__context__ is None
+    # Cycles are possible only in hand-built chains, but must not hang the renderer.
+    seen: set[int] = set()
+    while isinstance(exc, EarlyReturn) and id(exc) not in seen:
+      seen.add(id(exc))
+      # An EarlyReturn without a payload has nothing to show as a message.
+      if not exc.args:
+        return False
+      # A live implicit __context__ means a real error was being handled here.
+      if exc.__context__ is not None and not exc.__suppress_context__:
+        return False
+      # .q() links layers through __cause__, hand-raised wraps through the payload.
+      if exc.__cause__ is not None:
+        exc = exc.__cause__
+      elif isinstance(exc.args[0], Exception):
+        exc = exc.args[0]
+      else:
+        return not isinstance(exc.args[0], BaseException)
+    return False
 
   if _is_message(exc):
     content = _wrap(str(cast("object", exc.args[0])), width=wrap_width)
