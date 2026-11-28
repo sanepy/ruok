@@ -21,3 +21,7 @@ typecheck: (ensure "basedpyright")
 [group('qa')]
 test: (ensure "pytest")
   pytest
+
+[group('qa')]
+viz *args:
+  uv run python -m tests.visual {{args}}
